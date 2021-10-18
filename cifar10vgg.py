@@ -1,4 +1,3 @@
-
 from __future__ import print_function
 import keras
 from keras.datasets import cifar10
@@ -11,9 +10,11 @@ import numpy as np
 from keras.layers.core import Lambda
 from keras import backend as K
 from keras import regularizers
+from keras.utils import np_utils
+import tensorflow as tf
 
 class cifar10vgg:
-    def __init__(self,train=True):
+    def __init__(self,train=False):
         self.num_classes = 10
         self.weight_decay = 0.0005
         self.x_shape = [32,32,3]
@@ -156,8 +157,8 @@ class cifar10vgg:
         x_test = x_test.astype('float32')
         x_train, x_test = self.normalize(x_train, x_test)
 
-        y_train = keras.utils.to_categorical(y_train, self.num_classes)
-        y_test = keras.utils.to_categorical(y_test, self.num_classes)
+        y_train = keras.utils.np_utils.to_categorical(y_train, self.num_classes)
+        y_test = keras.utils.np_utils.to_categorical(y_test, self.num_classes)
 
         def lr_scheduler(epoch):
             return learning_rate * (0.5 ** (epoch // lr_drop))
@@ -178,12 +179,9 @@ class cifar10vgg:
         # (std, mean, and principal components if ZCA whitening is applied).
         datagen.fit(x_train)
 
-
-
         #optimization details
-        sgd = optimizers.SGD(lr=learning_rate, decay=lr_decay, momentum=0.9, nesterov=True)
+        sgd = tf.keras.optimizers.SGD(lr=learning_rate, decay=lr_decay, momentum=0.9, nesterov=True)
         model.compile(loss='categorical_crossentropy', optimizer=sgd,metrics=['accuracy'])
-
 
         # training process in a for loop with learning rate drop every 25 epoches.
 
@@ -197,14 +195,24 @@ class cifar10vgg:
 
 if __name__ == '__main__':
 
+    # TODO: prepare the following files
+    SOFTMAX_INPUTS_TRAIN_PATH = 'cifar10_softmax_inputs_train.npy'
+    SOFTMAX_OUTPUTS_TRAIN_PATH = 'cifar10_softmax_outputs_train.npy'
+    SOFTMAX_INPUTS_TEST_PATH = 'cifar10_softmax_inputs_test.npy'
+    SOFTMAX_OUTPUTS_TEST_PATH = 'cifar10_softmax_outputs_test.npy'
+    SOFTMAX_W_PATH = 'cifar10_softmax_W.npy'
+    SOFTMAX_B_PATH = 'cifar10_softmax_b.npy'
+    LABELS_TRAIN_PATH = 'cifar10_labels_train.npy'
+    LABELS_TEST_PATH = 'cifar10_labels_test.npy'
 
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
     x_train = x_train.astype('float32')
     x_test = x_test.astype('float32')
 
-    y_train = keras.utils.to_categorical(y_train, 10)
-    y_test = keras.utils.to_categorical(y_test, 10)
+    y_train = keras.utils.np_utils.to_categorical(y_train, 10)
+    y_test = keras.utils.np_utils.to_categorical(y_test, 10)
 
+    # inference pass on test set
     model = cifar10vgg()
 
     predicted_x = model.predict(x_test)
@@ -213,5 +221,77 @@ if __name__ == '__main__':
     loss = sum(residuals)/len(residuals)
     print("the validation 0/1 loss is: ",loss)
 
+    '''    
+    vgg_model = model.model
+    print(vgg_model.summary())
+    # model.build_model().save('/Users/suyushan/Documents/cifar-vgg/saved_model')
 
+    # cifar10_softmax_inputs_test (10000 * 512)
+    cifar10_softmax_in_layer = vgg_model.layers[57]
+    keras_function_inputs = K.function([vgg_model.input], [cifar10_softmax_in_layer.output])
+    inputs_test = keras_function_inputs([x_test])
+    with open(SOFTMAX_INPUTS_TEST_PATH, 'wb') as f:
+        np.save(f, inputs_test[0])
+    # print(inputs_test[0].shape)
 
+    # cifar10_softmax_outputs_test (10000 * 10)
+    cifar10_softmax_out_layer = vgg_model.layers[58]
+    keras_function_outputs = K.function([vgg_model.input], [cifar10_softmax_out_layer.output])
+    outputs_test = keras_function_outputs([x_test])
+    with open(SOFTMAX_OUTPUTS_TEST_PATH, 'wb') as f:
+        np.save(f, outputs_test[0])
+
+    # cifar10_labels_test (10000 * 10)
+    with open(LABELS_TEST_PATH, 'wb') as f:
+        np.save(f, y_test)
+
+    # inference pass on training set
+    model = cifar10vgg()
+
+    predicted_x = model.predict(x_train)
+    residuals = np.argmax(predicted_x,1)!=np.argmax(y_train,1)
+
+    loss = sum(residuals)/len(residuals)
+    print("the validation 0/1 loss is: ",loss)
+    '''
+
+    vgg_model = model.model
+    print(vgg_model.summary())
+
+    # cifar10_softmax_inputs_train (50000 * 512)
+    # cifar10_softmax_in_layer = vgg_model.layers[57]
+    # keras_function_inputs = K.function([vgg_model.input], [cifar10_softmax_in_layer.output])
+    # for i in range(0, len(x_train), 250):
+    #     inputs_train_i = keras_function_inputs([x_train[i:i+250]])
+    #     if i == 0:
+    #         inputs_train = inputs_train_i[0]
+    #     else:
+    #         inputs_train = np.concatenate((inputs_train, inputs_train_i[0]))
+    # with open(SOFTMAX_INPUTS_TRAIN_PATH, 'wb') as f:
+    #     np.save(f, inputs_train)
+
+    # cifar10_softmax_outputs_train (50000 * 10)
+    cifar10_softmax_out_layer = vgg_model.layers[58]
+
+    dense_layer_weights = cifar10_softmax_out_layer.get_weights()
+    weight = dense_layer_weights[0]
+    bias = dense_layer_weights[1]
+
+    with open(SOFTMAX_W_PATH, 'wb') as f:
+        np.save(f, weight)
+    with open(SOFTMAX_B_PATH, 'wb') as f:
+        np.save(f, bias)
+
+    # keras_function_outputs = K.function([vgg_model.input], [cifar10_softmax_out_layer.output])
+    # for i in range(0, len(x_train), 250):
+    #     outputs_train_i = keras_function_outputs([x_train[i:i+250]])
+    #     if i == 0:
+    #         outputs_train = outputs_train_i[0]
+    #     else:
+    #         outputs_train = np.concatenate((outputs_train, outputs_train_i[0]))
+    # with open(SOFTMAX_OUTPUTS_TRAIN_PATH, 'wb') as f:
+    #     np.save(f, outputs_train)
+
+    # # cifar10_labels_train (50000 * 10)
+    # with open(LABELS_TRAIN_PATH, 'wb') as f:
+    #     np.save(f, y_train)
