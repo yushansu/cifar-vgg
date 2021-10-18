@@ -195,7 +195,7 @@ class cifar10vgg:
 
 if __name__ == '__main__':
 
-    # TODO: prepare the following files
+    # prepare the following files
     SOFTMAX_INPUTS_TRAIN_PATH = 'cifar10_softmax_inputs_train.npy'
     SOFTMAX_OUTPUTS_TRAIN_PATH = 'cifar10_softmax_outputs_train.npy'
     SOFTMAX_INPUTS_TEST_PATH = 'cifar10_softmax_inputs_test.npy'
@@ -221,77 +221,57 @@ if __name__ == '__main__':
     loss = sum(residuals)/len(residuals)
     print("the validation 0/1 loss is: ",loss)
 
-    '''    
+        
     vgg_model = model.model
     print(vgg_model.summary())
     # model.build_model().save('/Users/suyushan/Documents/cifar-vgg/saved_model')
 
-    # cifar10_softmax_inputs_test (10000 * 512)
+    # prepare inputs (X)
     cifar10_softmax_in_layer = vgg_model.layers[57]
     keras_function_inputs = K.function([vgg_model.input], [cifar10_softmax_in_layer.output])
+    # cifar10_softmax_inputs_test (X_test) (10000 * 512)
     inputs_test = keras_function_inputs([x_test])
     with open(SOFTMAX_INPUTS_TEST_PATH, 'wb') as f:
         np.save(f, inputs_test[0])
-    # print(inputs_test[0].shape)
+    # cifar10_softmax_inputs_train (X_train) (50000 * 512)
+    for i in range(0, len(x_train), 250):
+        inputs_train_i = keras_function_inputs([x_train[i:i+250]])
+        if i == 0:
+            inputs_train = inputs_train_i[0]
+        else:
+            inputs_train = np.concatenate((inputs_train, inputs_train_i[0]))
+    with open(SOFTMAX_INPUTS_TRAIN_PATH, 'wb') as f:
+        np.save(f, inputs_train)
 
-    # cifar10_softmax_outputs_test (10000 * 10)
+    # prepare outputs (Y) and labels (lbls_train, lbls_test)
     cifar10_softmax_out_layer = vgg_model.layers[58]
     keras_function_outputs = K.function([vgg_model.input], [cifar10_softmax_out_layer.output])
+    # cifar10_softmax_outputs_test (Y_test) (10000 * 10)
     outputs_test = keras_function_outputs([x_test])
     with open(SOFTMAX_OUTPUTS_TEST_PATH, 'wb') as f:
         np.save(f, outputs_test[0])
-
-    # cifar10_labels_test (10000 * 10)
+    # cifar10_labels_test (lbls_test) (10000 * 1)
     with open(LABELS_TEST_PATH, 'wb') as f:
-        np.save(f, y_test)
+        np.save(f, np.argmax(outputs_test[0], axis=1).astype(np.int32))
+    # cifar10_softmax_outputs_train (Y_train) (50000 * 10)
+    for i in range(0, len(x_train), 250):
+        outputs_train_i = keras_function_outputs([x_train[i:i+250]]) 
+        if i == 0:
+            outputs_train = outputs_train_i[0]
+        else:
+            outputs_train = np.concatenate((outputs_train, outputs_train_i[0]))
+    with open(SOFTMAX_OUTPUTS_TRAIN_PATH, 'wb') as f:
+        np.save(f, outputs_train)
+    # cifar10_labels_train (lbls_train) (50000 * 1)
+    with open(LABELS_TRAIN_PATH, 'wb') as f:
+        np.save(f, np.argmax(outputs_train, axis=1).astype(np.int32))
 
-    # inference pass on training set
-    model = cifar10vgg()
-
-    predicted_x = model.predict(x_train)
-    residuals = np.argmax(predicted_x,1)!=np.argmax(y_train,1)
-
-    loss = sum(residuals)/len(residuals)
-    print("the validation 0/1 loss is: ",loss)
-    '''
-
-    vgg_model = model.model
-    print(vgg_model.summary())
-
-    # cifar10_softmax_inputs_train (50000 * 512)
-    # cifar10_softmax_in_layer = vgg_model.layers[57]
-    # keras_function_inputs = K.function([vgg_model.input], [cifar10_softmax_in_layer.output])
-    # for i in range(0, len(x_train), 250):
-    #     inputs_train_i = keras_function_inputs([x_train[i:i+250]])
-    #     if i == 0:
-    #         inputs_train = inputs_train_i[0]
-    #     else:
-    #         inputs_train = np.concatenate((inputs_train, inputs_train_i[0]))
-    # with open(SOFTMAX_INPUTS_TRAIN_PATH, 'wb') as f:
-    #     np.save(f, inputs_train)
-
-    # cifar10_softmax_outputs_train (50000 * 10)
-    cifar10_softmax_out_layer = vgg_model.layers[58]
-
+    # prepare weight and bias (W and b)
     dense_layer_weights = cifar10_softmax_out_layer.get_weights()
     weight = dense_layer_weights[0]
     bias = dense_layer_weights[1]
-
     with open(SOFTMAX_W_PATH, 'wb') as f:
         np.save(f, weight)
     with open(SOFTMAX_B_PATH, 'wb') as f:
         np.save(f, bias)
 
-    # keras_function_outputs = K.function([vgg_model.input], [cifar10_softmax_out_layer.output])
-    # for i in range(0, len(x_train), 250):
-    #     outputs_train_i = keras_function_outputs([x_train[i:i+250]])
-    #     if i == 0:
-    #         outputs_train = outputs_train_i[0]
-    #     else:
-    #         outputs_train = np.concatenate((outputs_train, outputs_train_i[0]))
-    # with open(SOFTMAX_OUTPUTS_TRAIN_PATH, 'wb') as f:
-    #     np.save(f, outputs_train)
-
-    # # cifar10_labels_train (50000 * 10)
-    # with open(LABELS_TRAIN_PATH, 'wb') as f:
-    #     np.save(f, y_train)
